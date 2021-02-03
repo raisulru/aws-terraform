@@ -1,0 +1,31 @@
+{
+    "Comment": "Test step Function for validating",
+    "StartAt": "Checking Input",
+    "States": {
+      "Checking Input": {
+        "Type": "Choice",
+        "Choices": [
+          {
+            "Variable": "$.pretx_window",
+            "StringEquals": "validate",
+            "Next": "start event"
+          },
+          {
+            "Variable": "$.pretx_window",
+            "StringEquals": "validate",
+            "Next": "start event"
+          }
+        ]
+      },
+      "Validation Success": {
+        "Type": "Task",
+        "Resource": "${validate_function}",
+        "End": true
+      },
+      "Validation Failed": {
+        "Type": "Task",
+        "Resource": "${not_validate_func}",
+        "End": "calculate pre-tx"
+      }
+    }
+  }
