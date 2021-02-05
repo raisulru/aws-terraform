@@ -78,15 +78,14 @@ provider "archive" {}
 
 data "archive_file" "zip_validate" {
   type        = "zip"
-  source_file = "my_function.py"
-  output_path = "my_function.zip"
+  source_file = "validate.py"
+  output_path = "validate.zip"
 }
-
 
 data "archive_file" "zip_not_validate" {
   type        = "zip"
-  source_file = "not_validated.py"
-  output_path = "not_validated.zip"
+  source_file = "not_validate.py"
+  output_path = "not_validate.zip"
 }
 
 data "aws_iam_policy_document" "policy" {
@@ -115,7 +114,7 @@ resource "aws_lambda_function" "lambda1" {
   source_code_hash = data.archive_file.zip_validate.output_base64sha256
 
   role    = aws_iam_role.iam_for_lambda.arn
-  handler = "my_function.validate_somthing"
+  handler = "validate.validate_input"
   runtime = "python3.8"
 }
 
@@ -126,7 +125,7 @@ resource "aws_lambda_function" "lambda2" {
   source_code_hash = data.archive_file.zip_not_validate.output_base64sha256
 
   role    = aws_iam_role.iam_for_lambda.arn
-  handler = "my_function.not_validated"
+  handler = "not_validate.not_validated_input"
   runtime = "python3.8"
 }
 
@@ -146,9 +145,68 @@ resource "aws_cloudwatch_event_rule" "console" {
 
 
 # Step Function
+
+data "aws_iam_policy_document" "step_function_policy_document" {
+  version = "2012-10-17"
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sts:AssumeRole"
+    ]
+    principals {
+      identifiers = [
+        "states.amazonaws.com"
+      ]
+      type = "Service"
+    }
+    sid = "StepFunctionAssumeRole"
+  }
+}
+
+resource "aws_iam_role" "step_func_role" {
+  name               = "step_func_role"
+  assume_role_policy = data.aws_iam_policy_document.step_function_policy_document.json
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_iam_role_policy" "step_func_iam_role_policy" {
+  name   = "step_func_iam_role_policy"
+  role   = aws_iam_role.step_func_role.id
+
+  policy = <<-EOF
+  {
+      "Version": "2012-10-17",
+      "Statement": [
+          {
+              "Effect": "Allow",
+              "Action": [
+                "lambda:ListFunctions",
+                "lambda:ListEventSourceMappings",
+                "lambda:ListLayerVersions",
+                "lambda:ListLayers",
+                "lambda:GetAccountSettings",
+                "lambda:CreateEventSourceMapping",
+                "lambda:InvokeFunction"
+              ],
+              "Resource": [
+                  "${aws_lambda_function.lambda1.arn}",
+                  "${aws_lambda_function.lambda2.arn}"
+              ]
+          }
+      ]
+  }
+EOF
+
+}
+
+
 resource "aws_sfn_state_machine" "my_first_step_function" {
   name       = "test_step_function"
-  role_arn   = aws_iam_role.iam_for_lambda.arn
+  role_arn   = aws_iam_role.step_func_role.arn
   definition = data.template_file.step_function_definition.rendered
 }
 
